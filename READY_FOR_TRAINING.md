@@ -338,3 +338,61 @@ READY_FOR_TRAINING.md         # 本文件
 **然后**: 开始 AutoDL 训练！
 
 **目标**: Top 10% 🏆
+
+---
+
+## ⚙️ AutoDL 快速验证（三步走）
+
+> 适用场景：在 AutoDL 上首次跑通 DynUNet + 全部优化，用最少成本验证环境与配置。
+
+### Step 0：克隆仓库并安装依赖
+
+```bash
+git clone https://github.com/hongping-zh/vesuvius-challenge.git
+cd vesuvius-challenge
+
+# 可选：创建虚拟环境
+python -m venv .venv
+source .venv/bin/activate  # Windows 上使用 .venv\Scripts\activate
+
+# 安装依赖
+bash autodl_setup.sh
+
+# 自检优化模块
+python test_optimizations.py
+```
+
+### Step 1：1 Epoch Sanity Check（小模型 Optimized DynUNet）
+
+```bash
+python train.py --config configs/autodl_dynunet_optimized.yaml --epochs 1 --debug
+```
+
+- 确认：
+  - 能正常加载数据（Ink-only、多通道）
+  - DynUNet 正常前向 & 反向传播
+  - 显存占用在可接受范围（5090 上一般 < 24GB）
+
+### Step 2：8 Epoch 快速验证（小模型 Optimized DynUNet）
+
+```bash
+python train.py --config configs/autodl_dynunet_optimized.yaml --epochs 8
+```
+
+- 说明：
+  - 使用配置 `configs/autodl_dynunet_optimized.yaml`
+  - 命令行 `--epochs 8` 覆盖 YAML 中的长训设置
+  - 观察验证集 SurfaceDice 是否逐步提升，Epoch 8 目标 > 0.70
+
+### Step 3：8 Epoch 快速验证（大模型 DynUNet 570M）
+
+```bash
+python train.py --config configs/autodl_dynunet_570m.yaml
+```
+
+- 说明：
+  - 配置 `configs/autodl_dynunet_570m.yaml` 已内置 `epochs: 8`
+  - `batch_size=1, accumulation_steps=16` 适配 32GB 5090
+  - `warmup_epochs=4` + `loss_schedule='two_stage'`，前半专注基础分割，后半加入拓扑约束
+
+> 建议：先完成 Step 1 & Step 2，确认小模型指标和日志都正常，再进行 Step 3 的大模型验证。
