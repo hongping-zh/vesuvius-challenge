@@ -1,0 +1,106 @@
+# configs/autodl_dynunet_optimized.yaml
+# DynUNet 完全优化配置
+# 包含所有 P0/P1 优化项
+
+model:
+  type: dynunet
+  in_channels: 5              # raw + grad_x + grad_y + grad_z + LoG
+  base_num_features: 64
+  out_channels: 1
+  deep_supervision: true
+
+data:
+  train_dir: 'data/processed/train'
+  val_dir: 'data/processed/val'
+  
+  # ★★★★★ 优化 1: 更大 Patch Size
+  patch_size: [128, 128, 128]  # 从 96 升级到 128
+  
+  spacing: [1.0, 1.0, 1.0]
+  
+  # ★★★★★ 优化 2: Ink-only Sampling
+  dataset_type: 'ink_aware'    # 使用墨迹感知数据集
+  positive_ratio: 0.7          # 70% 包含墨迹
+  min_ink_pixels: 100          # 最少墨迹像素
+  
+  num_samples_per_epoch: 500   # 每个 epoch 采样数
+  cache_rate: 1.0              # 全部缓存
+  
+  # ★★★★★ 优化 3: 多通道输入
+  channels: ['raw', 'grad', 'log']  # raw + grad_xyz + LoG
+
+training:
+  batch_size: 1                # 128³ patch 需要降低 batch size
+  accumulation_steps: 8        # 有效 batch = 8
+  epochs: 50
+  learning_rate: 0.0003
+  weight_decay: 0.00001
+  num_workers: 4
+  prefetch_factor: 2
+  pin_memory: true
+  save_frequency: 5
+  checkpoint_dir: 'models/checkpoints_dynunet_optimized'
+  
+  # ★★★★ 优化 4: 动态 Loss 权重
+  use_dynamic_loss: true
+  warmup_epochs: 20            # 前 20 epochs 只学基础
+
+# Loss 配置（会被动态调度覆盖）
+loss:
+  type: vesuvius_composite
+  # 初始权重（Epoch 0-19）
+  dice_weight: 0.5
+  bce_weight: 0.5
+  surface_weight: 0.0
+  topology_weight: 0.0
+  centerline_weight: 0.0       # 不用
+  
+  # 后期权重（Epoch 20+）会自动调整为：
+  # dice: 0.4, bce: 0.2, surface: 0.2, topology: 0.2
+
+optimizer:
+  type: adamw
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+
+scheduler:
+  type: cosine
+  T_max: 50
+  eta_min: 0.000001
+
+augmentation:
+  random_flip: true
+  random_rotation: 15
+  elastic_deformation: true
+  elastic_alpha: [100, 200]
+  elastic_sigma: [10, 20]
+  intensity_shift: 0.1
+  gaussian_noise: true
+  noise_std: 0.05
+
+postprocessing:
+  enabled: true
+  min_component_size: 800
+  min_hole_size: 1000
+  persistence_threshold: 0.0015
+  
+  # ★★ 优化 5: Multi-Threshold Ensemble
+  multi_threshold: true
+  thresholds: [0.3, 0.4, 0.5]
+
+evaluation:
+  use_vesuvius_metrics: true
+  surface_dice_tau: 2.0
+  spacing: [1.0, 1.0, 1.0]
+
+logging:
+  use_wandb: false
+  project: 'vesuvius-dynunet-optimized'
+  log_frequency: 10
+
+inference:
+  patch_size: [128, 128, 128]
+  overlap: 0.5
+  batch_size: 2
+  tta: true
+  use_postprocessing: true

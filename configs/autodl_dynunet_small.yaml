@@ -1,0 +1,79 @@
+# configs/autodl_dynunet_small.yaml
+# DynUNet 快速验证配置
+# 先用这个跑 5~10 epochs 快速验证
+
+model:
+  type: dynunet
+  in_channels: 1          # 先用单通道，验证通过后改成 3
+  base_num_features: 64
+  out_channels: 1
+  deep_supervision: true
+
+data:
+  train_dir: 'data/processed/train'
+  val_dir: 'data/processed/val'
+  patch_size: [96, 96, 96]      # 5090 完全吃得下
+  spacing: [1.0, 1.0, 1.0]
+  num_samples_per_epoch: 100    # 快速验证用少量样本
+  positive_ratio: 0.5           # 只采样一半含墨 patch
+  cache_rate: 1.0               # 全部缓存到内存，提速 3~5 倍
+
+training:
+  batch_size: 2
+  accumulation_steps: 4         # 有效 batch=8
+  epochs: 8                     # 快速验证
+  learning_rate: 0.0003         # 3e-4
+  weight_decay: 0.00001
+  num_workers: 4
+  prefetch_factor: 2
+  pin_memory: true
+  save_frequency: 2
+  checkpoint_dir: 'models/checkpoints_dynunet_small'
+
+# Loss 配置
+loss:
+  type: vesuvius_composite
+  dice_weight: 1.0
+  bce_weight: 1.0
+  surface_weight: 0.5          # 先小一点
+  topology_weight: 0.3
+  centerline_weight: 0.0       # 关闭
+
+optimizer:
+  type: adamw
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+
+scheduler:
+  type: cosine
+  T_max: 8
+  eta_min: 0.000001
+
+augmentation:
+  random_flip: true
+  random_rotation: 15
+  elastic_deformation: true
+  elastic_alpha: [100, 200]
+  elastic_sigma: [10, 20]
+  intensity_shift: 0.1
+  gaussian_noise: true
+  noise_std: 0.05
+
+postprocessing:
+  enabled: true
+  min_component_size: 800
+  min_hole_size: 1000
+
+evaluation:
+  use_vesuvius_metrics: true
+  surface_dice_tau: 2.0
+  spacing: [1.0, 1.0, 1.0]
+
+logging:
+  use_wandb: false              # 快速验证不用 wandb
+  log_frequency: 10
+
+inference:
+  patch_size: [96, 96, 96]
+  overlap: 0.5
+  batch_size: 4

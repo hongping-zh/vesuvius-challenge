@@ -1,0 +1,54 @@
+# Vesuvius Challenge - 基线配置
+# 优化用于 AutoDL RTX 5090 (24GB)
+
+model:
+  type: 'unet3d_lite'  # 'unet3d' 或 'unet3d_lite'
+  in_channels: 1
+  out_channels: 1
+  base_channels: 32  # UNet3D 的基础通道数
+
+data:
+  train_dir: 'data/processed/train'
+  val_dir: 'data/processed/val'
+  patch_size: [64, 64, 64]  # (D, H, W)
+  
+training:
+  batch_size: 2  # 受限于显存
+  accumulation_steps: 4  # 等效 batch_size = 8
+  epochs: 50
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  num_workers: 4
+  save_frequency: 5  # 每 5 个 epoch 保存一次
+  checkpoint_dir: 'models/checkpoints'
+
+loss:
+  type: 'dice_bce'
+  dice_weight: 0.5
+  bce_weight: 0.5
+
+optimizer:
+  type: 'adamw'
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+
+scheduler:
+  type: 'cosine'
+  T_max: 50
+
+augmentation:
+  random_flip: true
+  random_rotation: 15  # degrees
+  elastic_deformation: true
+  intensity_shift: 0.1
+
+logging:
+  use_wandb: true
+  project: 'vesuvius-challenge'
+  log_frequency: 10  # 每 10 个 batch 记录一次
+
+inference:
+  patch_size: [64, 64, 64]
+  overlap: 0.5  # sliding window overlap
+  tta: true  # test-time augmentation
+  batch_size: 4

@@ -1,0 +1,77 @@
+# AutoDL 486机 RTX 5090 - 拓扑优化配置
+# 针对 Vesuvius Challenge 特殊评估指标优化
+
+model:
+  type: 'unet3d'
+  in_channels: 1
+  out_channels: 1
+  base_channels: 48
+
+data:
+  train_dir: 'data/processed/train'
+  val_dir: 'data/processed/val'
+  patch_size: [80, 80, 80]
+  
+training:
+  batch_size: 3
+  accumulation_steps: 3
+  epochs: 50
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  num_workers: 8
+  prefetch_factor: 4
+  save_frequency: 5
+  checkpoint_dir: 'models/checkpoints'
+
+# 拓扑感知损失函数 ⭐ 新增
+loss:
+  type: 'vesuvius_composite'  # 使用组合损失
+  dice_weight: 0.3
+  bce_weight: 0.2
+  surface_weight: 0.25        # 对应 SurfaceDice@τ (35%)
+  centerline_weight: 0.15     # 保持拓扑连通性
+  topology_weight: 0.1        # 对应 TopoScore (30%)
+
+optimizer:
+  type: 'adamw'
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+
+scheduler:
+  type: 'cosine'
+  T_max: 50
+
+augmentation:
+  random_flip: true
+  random_rotation: 15
+  elastic_deformation: true
+  intensity_shift: 0.1
+
+# 拓扑感知后处理 ⭐ 新增
+postprocessing:
+  enabled: true
+  min_component_size: 100
+  min_hole_size: 50
+  bridge_threshold: 0.1
+  merge_fragments: true
+
+# Vesuvius 评估指标 ⭐ 新增
+evaluation:
+  use_vesuvius_metrics: true
+  surface_dice_tau: 2.0
+  spacing: [1.0, 1.0, 1.0]
+  voi_alpha: 0.3
+  topo_weights: [0.34, 0.33, 0.33]
+
+logging:
+  use_wandb: true
+  project: 'vesuvius-challenge'
+  log_frequency: 10
+  log_topology_metrics: true  # 记录拓扑指标
+
+inference:
+  patch_size: [80, 80, 80]
+  overlap: 0.5
+  tta: true
+  batch_size: 6
+  use_postprocessing: true  # 使用后处理

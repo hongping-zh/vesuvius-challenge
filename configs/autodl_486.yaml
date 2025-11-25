@@ -1,0 +1,55 @@
+# AutoDL 486机 RTX 5090 (32GB) 优化配置
+# 充分利用 32GB 显存 + 90GB 内存 + 25核 CPU
+
+model:
+  type: 'unet3d'  # 使用标准版（显存充足）
+  in_channels: 1
+  out_channels: 1
+  base_channels: 48  # 从 32 增加到 48（更大的模型容量）
+
+data:
+  train_dir: 'data/processed/train'
+  val_dir: 'data/processed/val'
+  patch_size: [80, 80, 80]  # 从 64 增加到 80（更多上下文）
+  
+training:
+  batch_size: 3  # 从 2 增加到 3（利用 32GB 显存）
+  accumulation_steps: 3  # 等效 batch_size = 9
+  epochs: 50
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  num_workers: 8  # 从 4 增加到 8（利用 25核 CPU）
+  prefetch_factor: 4  # 预加载更多数据
+  save_frequency: 5
+  checkpoint_dir: 'models/checkpoints'
+
+loss:
+  type: 'dice_bce'
+  dice_weight: 0.5
+  bce_weight: 0.5
+
+optimizer:
+  type: 'adamw'
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+
+scheduler:
+  type: 'cosine'
+  T_max: 50
+
+augmentation:
+  random_flip: true
+  random_rotation: 15
+  elastic_deformation: true
+  intensity_shift: 0.1
+
+logging:
+  use_wandb: true
+  project: 'vesuvius-challenge'
+  log_frequency: 10
+
+inference:
+  patch_size: [80, 80, 80]
+  overlap: 0.5
+  tta: true
+  batch_size: 6  # 推理时可以更大

@@ -1,0 +1,75 @@
+# 测试配置（优化版）- 测试拓扑优化功能
+# 用于验证新的损失函数和评估指标
+
+model:
+  type: 'unet3d_lite'
+  in_channels: 1
+  out_channels: 1
+
+data:
+  train_dir: 'data/processed/train'
+  val_dir: 'data/processed/val'
+  patch_size: [32, 32, 32]
+  
+training:
+  batch_size: 1
+  accumulation_steps: 1
+  epochs: 3
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  num_workers: 2
+  prefetch_factor: 2
+  save_frequency: 1
+  checkpoint_dir: 'models/checkpoints_test_opt'
+
+# 使用拓扑优化损失 ⭐
+loss:
+  type: 'vesuvius_composite'
+  dice_weight: 0.3
+  bce_weight: 0.2
+  surface_weight: 0.25
+  centerline_weight: 0.15
+  topology_weight: 0.1
+
+optimizer:
+  type: 'adamw'
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+
+scheduler:
+  type: 'cosine'
+  T_max: 3
+
+augmentation:
+  random_flip: true
+  random_rotation: 15
+  elastic_deformation: false
+  intensity_shift: 0.1
+
+# 启用后处理 ⭐
+postprocessing:
+  enabled: true
+  min_component_size: 50  # 小数据，减小阈值
+  min_hole_size: 25
+  bridge_threshold: 0.1
+
+# 启用 Vesuvius 评估指标 ⭐
+evaluation:
+  use_vesuvius_metrics: true
+  surface_dice_tau: 2.0
+  spacing: [1.0, 1.0, 1.0]
+  voi_alpha: 0.3
+  topo_weights: [0.34, 0.33, 0.33]
+
+logging:
+  use_wandb: false
+  project: 'vesuvius-challenge-test'
+  log_frequency: 5
+  log_topology_metrics: true
+
+inference:
+  patch_size: [32, 32, 32]
+  overlap: 0.25
+  tta: false
+  batch_size: 2
+  use_postprocessing: true
