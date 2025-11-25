@@ -209,7 +209,46 @@ def main():
         print("3. python train.py --config configs/autodl_dynunet_optimized.yaml")
     else:
         print("\n⚠️  部分测试失败，请检查错误信息")
-    
+
+    # 环境自检（MONAI / Torch / GPU）
+    print("\n" + "-" * 60)
+    print("环境自检 (MONAI / Torch / GPU)")
+    print("-" * 60)
+    try:
+        import monai  # type: ignore
+        import torch  # type: ignore
+
+        print(f"MONAI 版本: {monai.__version__}")
+        print(f"Torch 版本: {torch.__version__}")
+
+        if not torch.cuda.is_available():
+            print("❌ CUDA 不可用，请检查 GPU 驱动 / CUDA 安装")
+        else:
+            props = torch.cuda.get_device_properties(0)
+            total_gb = props.total_memory / 1e9
+            print(f"GPU: {props.name}, 显存: {total_gb:.1f} GB")
+            if props.total_memory <= 30e9:
+                print("⚠️ GPU 显存 <= 30GB，可能无法安全跑 128³ Patch + 大模型")
+            else:
+                print("✅ GPU 显存满足 128³ Patch + DynUNet 训练需求")
+    except Exception as e:  # pragma: no cover - 仅作运行环境提示
+        print(f"⚠️ 环境自检出错: {e}")
+
+    # 可选：检查后处理优化脚本是否可用
+    print("\n" + "-" * 60)
+    print("后处理优化脚本可用性检查 (optimize_postprocessing.py)")
+    print("-" * 60)
+    try:
+        import optimize_postprocessing  # type: ignore
+
+        print("✅ 成功导入 optimize_postprocessing 模块")
+        if hasattr(optimize_postprocessing, "main"):
+            print("   提示: 可在训练后运行 `python optimize_postprocessing.py` 对阈值/后处理做网格搜索")
+        else:
+            print("   注意: 模块中未找到 main() 函数，如需一键运行可后续添加入口函数")
+    except Exception as e:  # pragma: no cover - 仅作运行环境提示
+        print(f"⚠️ 无法导入 optimize_postprocessing: {e}")
+
     print("="*60)
 
 
