@@ -109,6 +109,7 @@ def sliding_window_inference(
     overlap: float = 0.5,
     batch_size: int = 2,
     device: str = "cuda",
+    in_channels: int = 1,
 ) -> np.ndarray:
     model.eval()
     model.to(device)
@@ -151,7 +152,13 @@ def sliding_window_inference(
                     )
                 batch_data.append(patch)
 
+            # (B, 1, D, H, W)
             batch_tensor = torch.from_numpy(np.stack(batch_data)).float().unsqueeze(1)
+
+            # Tile single-channel volume to match model's expected input channels
+            if in_channels > 1:
+                batch_tensor = batch_tensor.repeat(1, in_channels, 1, 1, 1)
+
             batch_tensor = batch_tensor.to(device)
 
             preds = model(batch_tensor)
@@ -228,6 +235,7 @@ def main() -> None:
         overlap=0.5,
         batch_size=2,
         device=str(device),
+        in_channels=config["model"].get("in_channels", 1),
     )
 
     print(f"\nInference completed, prediction range: [{preds.min():.4f}, {preds.max():.4f}]")
