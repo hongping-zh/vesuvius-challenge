@@ -1,0 +1,110 @@
+# configs/autodl_dynunet_realdata_8epoch.yaml
+# DynUNet 真实数据 8 Epoch 快速验证金标准配置
+# 基于 autodl_dynunet_optimized.yaml 精简，仅调整：
+# - deep_supervision: false
+# - training.epochs: 8
+# - training.warmup_epochs: 3（动态 Loss 预热）
+# 其它保持与已验证稳定的 AutoDL 优化版本一致
+
+model:
+  type: dynunet
+  in_channels: 5              # raw + grad_x + grad_y + grad_z + LoG
+  base_num_features: 64
+  out_channels: 1
+  deep_supervision: false     # 真实数据首次验证：关闭深监督，避免多输出处理复杂度
+
+data:
+  train_dir: 'data/processed/train'   # 真实 Vesuvius 训练数据路径
+  val_dir: 'data/processed/val'       # 真实 Vesuvius 验证数据路径
+
+  # ★★★★★ 优化 1: 更大 Patch Size（已在 4090 上验证稳定）
+  patch_size: [128, 128, 128]
+
+  spacing: [1.0, 1.0, 1.0]
+
+  # ★★★★★ 优化 2: Ink-only Sampling（真实数据上真正发挥作用）
+  dataset_type: 'ink_aware'
+  positive_ratio: 0.7
+  min_ink_pixels: 100
+
+  num_samples_per_epoch: 500   # 每个 epoch 采样 500 个 patch，8 epoch = 4000 个样本
+  cache_rate: 1.0
+
+  # ★★★★★ 优化 3: 多通道输入
+  channels: ['raw', 'grad', 'log']
+
+training:
+  batch_size: 1                # 4090 (24GB+) 上已验证可行的 128³ 配置
+  accumulation_steps: 8        # 有效 batch ≈ 8
+  epochs: 8                    # 真实数据首次快速验证：8 Epoch
+  learning_rate: 0.0003
+  weight_decay: 0.00001
+  num_workers: 4
+  prefetch_factor: 2
+  pin_memory: true
+  save_frequency: 1            # 每个 epoch 保存一次，便于中断恢复
+  checkpoint_dir: 'models/checkpoints_dynunet_realdata_8epoch'
+
+  # 动态 Loss 权重（真实数据 8 Epoch 专用设置）
+  use_dynamic_loss: true
+  warmup_epochs: 3             # 前 3 个 epoch 以 Dice+BCE 为主，后 5 个逐步引入拓扑项
+
+loss:
+  type: vesuvius_composite
+  # 初始权重（Epoch 0-2/3）——主要关注分割质量
+  dice_weight: 0.5
+  bce_weight: 0.5
+  surface_weight: 0.0
+  topology_weight: 0.0
+  centerline_weight: 0.0
+
+  # 后期权重（在 loss_scheduler 中平滑过渡，可参考 two_stage 逻辑）：
+  # 目标比例如下（供参考）：
+  # dice: 0.4, bce: 0.2, surface: 0.2, topology: 0.2
+
+optimizer:
+  type: adamw
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+
+scheduler:
+  type: cosine
+  T_max: 8                     # 与 epochs 对齐
+  eta_min: 0.000001
+
+augmentation:
+  random_flip: true
+  random_rotation: 15
+  elastic_deformation: true
+  elastic_alpha: [100, 200]
+  elastic_sigma: [10, 20]
+  intensity_shift: 0.1
+  gaussian_noise: true
+  noise_std: 0.05
+
+postprocessing:
+  enabled: true
+  min_component_size: 800
+  min_hole_size: 1000
+  persistence_threshold: 0.0015
+
+  # Multi-Threshold Ensemble（可在真实数据验证后用 optimize_postprocessing.py 再微调）
+  multi_threshold: true
+  thresholds: [0.3, 0.4, 0.5]
+
+evaluation:
+  use_vesuvius_metrics: true
+  surface_dice_tau: 2.0
+  spacing: [1.0, 1.0, 1.0]
+
+logging:
+  use_wandb: false
+  project: 'vesuvius-dynunet-realdata-8epoch'
+  log_frequency: 10
+
+inference:
+  patch_size: [128, 128, 128]
+  overlap: 0.5
+  batch_size: 2
+  tta: true
+  use_postprocessing: true
